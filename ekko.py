@@ -20,9 +20,6 @@ from xml.etree.ElementTree import ElementTree
 
 import pymongo
 import requests
-import jinja2
-
-import credentials
 
 
 TMP_DIR = 'tmp'
@@ -377,10 +374,10 @@ class MlkshkAccount(Account):
 
         url = 'https://mlkshk.com' + url_fragment
         r = requests.get(url,  headers={ 'Authorization' : authorization_string })
-        print r.status_code
         return r
     
-    def mirror(self, page_limit=1):
+    def mirror(self, page_limit=None):
+        print 'page limit', page_limit
         print 'mirroring mlkshk'
         page = 1
         pivot_id = None
@@ -405,8 +402,9 @@ class MlkshkAccount(Account):
             
             pivot_id = images[len(images)-1]['pivot_id']
             page = page + 1
-            if page>page_limit:
-                break
+            if page_limit:
+                if page>page_limit:
+                    break
             
 
     def ingest(self):
@@ -578,25 +576,12 @@ def write_file(outfile, output):
 
 
 
-### OKEDOKE
+# TODO: put this in a config file
 
 connection = pymongo.Connection()
 db = connection.ekko
 collection = db.items
 
-
-
-class SplicedWriter:
-    def go_time(self):
-        items =  collection.find().sort('date', direction=pymongo.DESCENDING)
-        # for item in items:
-        #    print item['url']
-
-        env = jinja2.Environment(loader=jinja2.FileSystemLoader(['templates'], encoding='utf-8'))
-        t = env.get_template('everything.html.tpl')
-        out = t.render(items=items)
-        write_file('./foo.html', out)
-        
 
 accounts = []
 def read_accounts():
@@ -624,17 +609,11 @@ def main():
         print usage
               
     if command == 'mirror':
-        if(len(args) > 1):            
-            a = args[1]
-            print 'single mirror'
-            if a=='flickr':
-                fa.mirror_all()
-            if a=='twitter':
-                twa.mirror_all()
-            if a=='tumblr':
-                tua.mirror_all()
-            if a=='mlkshk':
-                ma.mirror_all()
+        if(len(args) > 1):
+            service = args[1]
+            for a in accounts:
+                if a.service == service:
+                    a.mirror_all()
         else:
             for account in accounts:
                 account.mirror_all()
@@ -646,11 +625,6 @@ def main():
     if command == 'update':
         for account in accounts:
             account.mirror_recent()
-
-    if command == 'print':
-        s = SplicedWriter()
-        s.go_time()
-
 
 if __name__ == "__main__":
     main()
