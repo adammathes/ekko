@@ -10,11 +10,15 @@ Then you can do whatever with it!
 
 Dependencies: python, mongo
 
+Tested with python 2.7.1, mongo 2.0.4
+
 Python modules: requests, pymongo
 
 ## Setup
 
-Copy accounts.json.example to accounts.json and edit the file, replacing the relevant account info.
+Copy accounts.json.example to accounts.json and edit the file, replacing the relevant account info. (This process could use some work.)
+
+You'll need API keys for flickr
 
 ## Usage
 
@@ -28,7 +32,6 @@ Put the data in mongo --
 
 python ekko.py ingest
 
-Update the data (only grab recent things) --
+Update the data (just grabs recently posted things) --
 
 python ekko.py update
-
