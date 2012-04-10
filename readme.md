@@ -6,9 +6,13 @@ Ekko is a thing that downloads your data from webservices and puts it in mongodb
 
 Then you can do whatever with it!
 
+## License
+
+Code is copyright 2012 Adam Mathes available under a BSD style license. See LICENSE 
+
 ## Install
 
-Dependencies: python, mongo
+Dependencies: python, mongodb
 
 Tested with python 2.7.1, mongo 2.0.4
 
