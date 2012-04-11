@@ -22,12 +22,12 @@ import pymongo
 import requests
 
 
-TMP_DIR = 'tmp'
+# TODO: put all this in a config/settings
+data_directory = 'data'
+connection = pymongo.Connection()
+db = connection.ekko
+collection = db.items
 
-#mongo
-connection = None
-db = None
-collection = None
 
 # This is an abstract class describing what accounts must do
 class Account:
@@ -40,14 +40,20 @@ class Account:
     def __init__(self, credentials):        
         self.credentials = credentials
 
+    # the json/xml etc from the service is dumped here
+    def data_directory(self):
+        return os.path.join(data_directory, self.service)
+
     # fetch and download *all* items from this account
     def mirror_all(self):
         self.mirror()
 
-    # fetch and download all items since date
+    # fetch and download the most recent PAGE of items
+    # TODO: adjust this to take a date parameter
     def mirror_recent(self):
         self.mirror(1)
 
+    # does the actual mirroring
     def mirror(self, page_limit=None):
         pass
 
@@ -74,23 +80,27 @@ class TwitterAccount(Account):
         # self.access_token_secret = credentials['access_token_secret']
 
     def mirror(self, page_limit=None):
-        print 'mirroring all for twitter account %s' % self.username
+        print 'downlading data for twitter account: %s...' % self.username
         page = 1
 
+        # oauth unnecessary for grabbing tweets, but necessary for favorites and other things
+        # TODO: use oauth when those credentials are there, grab more
         #hook = OAuthHook(self.access_token, self.access_token_secret, self.consumer_key, self.consumer_secret, header_auth=True)
         #client = requests.session(hooks={'pre_request': hook})
         client = requests.session()
         page = 1
         while True:
-            print 'fetching tweets page %i' % page
+            print 'fetching page %i' % page
             url = 'https://api.twitter.com/1/statuses/user_timeline.json?screen_name=%s&count=200&page=%i' % (self.username, page)
             print url
             response = requests.get(url)
+            # TODO: twitter is creaky and we probably need to do some RETRIES here
+            # For now you usually have to run ekko.py mirror twitter a few times to grab it all
             if(response.status_code != 200):
-                print 'did not get a 200, quitting'
+                print 'did not get a 200 response from twitter, giving up'
                 break            
             print 'saving page %i' % page
-            temp_file = os.path.join(TMP_DIR, self.service + self.username + str(page) + '.json')
+            temp_file = os.path.join(self.data_directory(), self.username + str(page) + '.json')
             write_file(temp_file, response.content)
             page = page + 1
             time.sleep(self.delay)
@@ -101,19 +111,20 @@ class TwitterAccount(Account):
 
     def ingest(self):
         page = 1
-        while True:
-            json_file = os.path.join(TMP_DIR, self.service + self.username + str(page) + '.json')
+        for json_file in os.listdir(self.data_directory()):
             try:
-                print json_file
                 f = open(json_file)
                 r = f.read()                
             except:
-                print "could not open file"
-                break
-            
-            tweets = json.loads(r)
-            self.ingest_tweets(tweets)
-            page = page + 1
+                print "could not open %s" % json_file
+                
+            try:
+                tweets = json.loads(r)
+                self.ingest_tweets(tweets)
+                page = page + 1
+            except:
+                print 'problem ingesting tweets: %s' % json_file
+
 
     def ingest_tweets(self, tweets):
         for tweet in tweets:
@@ -128,10 +139,10 @@ class TwitterAccount(Account):
                     'original': tweet,
                     }
             if(collection.find_one({'twitter_id': tweet['id']})):
-                print 'updating %s' % tweet['id']
+                print 'updating tweet id %s' % tweet['id']
                 collection.update({'twitter_id': tweet['id']}, item)
             else:
-                print 'inserting %s' % tweet['id']
+                print 'inserting tweet id %s' % tweet['id']
                 collection.insert(item)
 
 
@@ -145,12 +156,12 @@ class DeliciousAccount(Account):
         self.username = credentials['username']
 
     def bookmarks_file(self):
-        return os.path.join(TMP_DIR, self.service + self.username + '.xml')
+        return os.path.join(self.data_directory(), self.username + '.xml')
 
     # TODO: grab recent/all depending on mirror_all or not
     def mirror(self, page_limit=None):
-        print 'mirroring delicious'
-        password = getpass.getpass('delicious password:')
+        print 'downloading delicious data for %s' % self.username
+        password = getpass.getpass('please enter your delicious password:')
         if page_limit:
             depth = 'recent'
         else:
@@ -165,7 +176,7 @@ class DeliciousAccount(Account):
             bookmarks = tree.findall('post')
             self.ingest_bookmarks(bookmarks)
         except:
-            pass
+            print 'there was a problem parsing the delicious bookmarks files %s' % self.bookmarks_file()
         
     def ingest_bookmarks(self, bookmarks):    
         for bookmark in bookmarks:
@@ -180,16 +191,14 @@ class DeliciousAccount(Account):
                      'date': d,
                      'content': bookmark.attrib['extended'],
                      'tags': bookmark.attrib['tag']                     
-#                     'original': bookmark,
+#                     'original': bookmark, // no original since we don't have json, but i think this is everything?
                      }
             if(collection.find_one({'delicious_id': item['delicious_id']})):
-                print 'updating %s' % item['delicious_id']
+                print 'updating delicious id %s' % item['delicious_id']
                 collection.update({'delicious_id': item['delicious_id']}, item)
             else:
-                print 'inserting %s' % item['delicious_id']
+                print 'inserting delicious id %s' % item['delicious_id']
                 collection.insert(item)
-
-
 
 
 class FlickrAccount(Account):
@@ -202,12 +211,11 @@ class FlickrAccount(Account):
         self.credentials = credentials
         self.api_key = credentials['api_key']
         self.user_id = credentials['user_id']
-        # do an API call instead?
         self.username = credentials['username']
 
 
     def mirror(self, page_limit=None):
-        print 'mirroring all for flickr account %s' % self.username
+        print 'downloading data for flickr account %s' % self.username
         page = 1
         while True:
             print 'fetching photos page %i' % page
@@ -222,27 +230,25 @@ class FlickrAccount(Account):
                 break
             
             print 'saving page %i' % page
-            temp_file = os.path.join(TMP_DIR, self.service + self.username + str(page) + '.json')
+            temp_file = os.path.join(self.data_directory(), self.username + str(page) + '.json')
             write_file(temp_file, response.content)
             page = page + 1
             if page_limit:
                 if page > page_limit:
                     break
 
-
     def ingest(self):
         page = 1
-        while True:
-            json_file = os.path.join(TMP_DIR, self.service + self.username + str(page) + '.json')
+        for json_file in os.listdir(self.data_directory()):
             try:
                 f = open(json_file)
                 r = f.read()                
+                j = json.loads(r)
+                self.ingest_photos(j['photos']['photo'])
+                page = page + 1
             except:
-                print "could not open file"
+                print "problem ingesting %s" % json_file
                 break
-            j = json.loads(r)
-            self.ingest_photos(j['photos']['photo'])
-            page = page + 1
 
     def ingest_photos(self, photos):
         for photo in photos:
@@ -298,7 +304,7 @@ class TumblrAccount(Account):
             if(len(r['response']['posts']) == 0):
                break
                
-            temp_file = os.path.join(TMP_DIR, self.service + self.blog_url + str(page) + '.json')
+            temp_file = os.path.join(self.data_directory(), self.blog_url + str(page) + '.json')
             print temp_file
             write_file(temp_file, response.content)
             page = page + 1
@@ -310,7 +316,7 @@ class TumblrAccount(Account):
     def ingest(self):
         page = 1
         while True:
-            json_file = os.path.join(TMP_DIR, self.service + self.blog_url + str(page) + '.json')
+            json_file = os.path.join(self.data_directory(), self.blog_url + str(page) + '.json')
 
             try:
                 print json_file
@@ -393,7 +399,7 @@ class MlkshkAccount(Account):
                 print 'did not get a 200, quitting'
                 break            
 
-            temp_file = os.path.join(TMP_DIR, self.service + str(page) + '.json')
+            temp_file = os.path.join(self.data_directory(), str(page) + '.json')
             write_file(temp_file, response.content)
             images = json.loads(response.content)['sharedfiles']
             if len(images) == 0:
@@ -409,8 +415,7 @@ class MlkshkAccount(Account):
 
     def ingest(self):
         page = 1
-        while True:
-            json_file = os.path.join(TMP_DIR, self.service + str(page) + '.json')
+        for json_file in os.listdir(self.data_directory()):
             try:
                 f = open(json_file)
                 r = f.read()                
@@ -504,7 +509,8 @@ class BlogAccount(Account):
     credentials = None
     archive_url = None
     recent_url = None
-    source = None
+    source = 'blog'
+    service = 'blog'
     
     def __init__(self, credentials):
         self.credentials = credentials
@@ -527,15 +533,16 @@ class BlogAccount(Account):
 
 
     def archive_file(self):
-        return os.path.join(TMP_DIR, self.source + 'archive.json')
+        return os.path.join(self.data_directory(), 'archive.json')
 
     def recent_file(self):
-        return os.path.join(TMP_DIR, self.source + 'recent.json')
+        return os.path.join(self.data_directory(), 'recent.json')
 
 
     def ingest(self):
-        for file_name in (self.archive_file(), self.recent_file()):
-           f = open(file_name)
+        print self.data_directory()
+        for file_name in os.listdir(self.data_directory()):
+           f = open(os.path.join(self.data_directory(), file_name))
            r = f.read()                
            posts = json.loads(r)
            self.ingest_posts(posts)
@@ -576,11 +583,6 @@ def write_file(outfile, output):
 
 
 
-# TODO: put this in a config file
-
-connection = pymongo.Connection()
-db = connection.ekko
-collection = db.items
 
 
 accounts = []
