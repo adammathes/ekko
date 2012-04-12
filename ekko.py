@@ -14,7 +14,6 @@ import random
 import base64
 
 from optparse import OptionParser
-from oauth_hook import OAuthHook
 
 from xml.etree.ElementTree import ElementTree
 
