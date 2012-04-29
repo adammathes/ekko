@@ -469,10 +469,10 @@ class ReaderAccount(Account):
         try:
            f = open(self.json_archive_file)
            r = f.read()                
+           posts = json.loads(r)['items']
+           self.ingest_posts(posts)
         except:
             print 'could not open archive file'
-        posts = json.loads(r)['items']
-        self.ingest_posts(posts)
 
     def ingest_posts(self, posts):
         for post in posts:
