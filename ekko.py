@@ -29,7 +29,7 @@ collection = db.items
 
 
 # This is an abstract class describing what accounts must do
-class Account:
+class Account(object):
     service = 'abstract account'
     credentials = None
 
@@ -150,6 +150,7 @@ class DeliciousAccount(Account):
     service = 'delicious'
     credentials = None
     username = None
+    api_url = 'https://api.del.icio.us/v1/'
 
     def __init__(self, credentials):
         self.credentials = credentials
@@ -160,13 +161,13 @@ class DeliciousAccount(Account):
 
     # TODO: grab recent/all depending on mirror_all or not
     def mirror(self, page_limit=None):
-        print 'downloading delicious data for %s' % self.username
-        password = getpass.getpass('please enter your delicious password:')
+        print 'downloading {0} data for {1}'.format(self.service, self.username)
+        password = getpass.getpass('please enter your password for {0}:'.format(self.service))
         if page_limit:
             depth = 'recent'
         else:
             depth = 'all'
-        r = requests.get('https://api.del.icio.us/v1/posts/%s' % depth, auth=(self.username, password))
+        r = requests.get('{0}posts/{1}'.format(self.api_url, depth), auth=(self.username, password))
         write_file(self.bookmarks_file(), r.content)
 
     def ingest(self):
@@ -176,29 +177,40 @@ class DeliciousAccount(Account):
             bookmarks = tree.findall('post')
             self.ingest_bookmarks(bookmarks)
         except:
-            print 'there was a problem parsing the delicious bookmarks files %s' % self.bookmarks_file()
+            print 'there was a problem parsing the {0} bookmarks files {1}'.format(self.service, self.bookmarks_file())
         
     def ingest_bookmarks(self, bookmarks):    
         for bookmark in bookmarks:
 
             time_struct = time.strptime(bookmark.attrib['time'], "%Y-%m-%dT%H:%M:%SZ") # 2012-03-31T22:14:53Z
             d = datetime.fromtimestamp(time.mktime(time_struct))
-            
-            item = { 'delicious_id': bookmark.attrib['href'],
+            service_identifier = '{0}_id'.format(self.service)
+            item = { service_identifier: bookmark.attrib['href'], # i suggest hash instead of href
                      'url': bookmark.attrib['href'],
                      'source': self.service,
                      'title': bookmark.attrib['description'],
                      'date': d,
                      'content': bookmark.attrib['extended'],
-                     'tags': bookmark.attrib['tag']                     
+                     'tags': bookmark.attrib['tag'],
+                     'meta': bookmark.attrib['meta']
 #                     'original': bookmark, // no original since we don't have json, but i think this is everything?
                      }
-            if(collection.find_one({'delicious_id': item['delicious_id']})):
-                print 'updating delicious id %s' % item['delicious_id']
-                collection.update({'delicious_id': item['delicious_id']}, item)
+            if(collection.find_one({service_identifier: item[service_identifier]})):
+                print 'updating {0} id {1}'.format(self.service, item[service_identifier])
+                collection.update({service_identifier: item[service_identifier]}, item)
             else:
-                print 'inserting delicious id %s' % item['delicious_id']
+                print 'inserting {0} id {1}'.format(self.service, item[service_identifier])
                 collection.insert(item)
+
+class PinboardAccount(DeliciousAccount):
+    service = 'pinboard'
+    credentials = None
+    username = None
+    api_url = 'https://api.pinboard.in/v1/'
+
+    def __init__(self, credentials):
+        super(PinboardAccount, self).__init__(credentials)
+
 
 
 class FlickrAccount(Account):
