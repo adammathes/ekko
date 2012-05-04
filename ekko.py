@@ -580,10 +580,14 @@ def write_file(outfile, output):
             os.makedirs(outdir)
 
         f = open(outfile, 'w')
-        f.write(output) #.encode('utf-8', 'ignore'))
-        f.close()
-    except IOError:
-        print 'NO!!! could not write to %s' % outfile
+        try:
+            f.write(output)
+        except UnicodeEncodeError as e:
+            f.write(output.encode('utf-8', 'ignore'))
+        finally:
+            f.close()
+                except IOError:
+                    print 'NO!!! could not write to %s' % outfile
 
 
 
