@@ -31,4 +31,10 @@
 	"service": "delicious",
 	"username": "USERNAME"
     },
+
+    {
+    "service": "pinboard",
+    "username": "USERNAME"
+    },
+
 ]
