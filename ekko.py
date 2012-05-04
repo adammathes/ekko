@@ -23,9 +23,15 @@ import requests
 
 # TODO: put all this in a config/settings
 data_directory = 'data'
-connection = pymongo.Connection()
-db = connection.ekko
-collection = db.items
+
+try:
+    connection = pymongo.Connection()
+    db = connection.ekko
+    collection = db.items
+except pymongo.errors.AutoReconnect as e:
+    # couldn't connect to MongoDB, die
+    print e
+    quit()
 
 
 # This is an abstract class describing what accounts must do
