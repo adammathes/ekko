@@ -111,18 +111,19 @@ class TwitterAccount(Account):
     def ingest(self):
         page = 1
         for json_file in os.listdir(self.data_directory()):
+            json_file_path = os.path.join(self.data_directory(),json_file)
             try:
-                f = open(json_file)
-                r = f.read()                
+                f = open(json_file_path)
+                r = f.read()
             except:
-                print "could not open %s" % json_file
-                
+                print "could not open %s" % json_file_path
+
             try:
                 tweets = json.loads(r)
                 self.ingest_tweets(tweets)
                 page = page + 1
             except:
-                print 'problem ingesting tweets: %s' % json_file
+                print 'problem ingesting tweets: %s' % json_file_path
 
 
     def ingest_tweets(self, tweets):
