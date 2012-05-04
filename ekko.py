@@ -599,8 +599,8 @@ def write_file(outfile, output):
             f.write(output.encode('utf-8', 'ignore'))
         finally:
             f.close()
-            except IOError:
-                print 'NO!!! could not write to %s' % outfile
+    except IOError:
+        print 'NO!!! could not write to %s' % outfile
 
 
 
